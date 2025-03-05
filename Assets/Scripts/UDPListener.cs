@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using NaughtyAttributes;
 using UnityEngine;
 
 public class UDPListener : MonoBehaviour
@@ -22,6 +23,7 @@ public class UDPListener : MonoBehaviour
     {
         InitializeUDPListener();
     }
+
     public void InitializeUDPListener()
     {
         ipEndPointData = new IPEndPoint(IPAddress.Any, portData);
@@ -35,27 +37,44 @@ public class UDPListener : MonoBehaviour
         if (showDebug) Debug.Log("BufSize: " + clientData.Client.ReceiveBufferSize);
         AC = new System.AsyncCallback(ReceivedUDPPacket);
         clientData.BeginReceive(AC, obj);
-        Debug.Log("UDP - Start Receiving..");
+        Debug.Log("UDP - Start Receiving...");
     }
 
     void ReceivedUDPPacket(System.IAsyncResult result)
     {
-        //stopwatch.Start();
         receivedBytes = clientData.EndReceive(result, ref ipEndPointData);
-
         ParsePacket();
-
         clientData.BeginReceive(AC, obj);
-
-        //stopwatch.Stop();
-        //Debug.Log(stopwatch.ElapsedTicks);
-        //stopwatch.Reset();
     } // ReceiveCallBack
+
+    [Button]
+    public void SendTestUDPPacket()
+    {
+        SendUDPPacket("Test!");
+    }
+
+    public void SendUDPPacket(string message)
+    {
+        try
+        {
+            byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
+            clientData.Send(data, data.Length, new IPEndPoint(IPAddress.Parse("127.0.0.1"), portData));
+            if (showDebug) Debug.Log($"Sent UDP Packet to {ipEndPointData.Address}:{ipEndPointData.Port}");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError("Error sending UDP packet: " + e.Message);
+        }
+    }
 
     void ParsePacket()
     {
         // work with receivedBytes
         Debug.Log("receivedBytes len = " + receivedBytes.Length);
+        if (receivedBytes.Length < 100)
+        {
+            Debug.Log("Message: " + System.Text.Encoding.Default.GetString(receivedBytes));
+        }
     }
 
     void OnDestroy()
