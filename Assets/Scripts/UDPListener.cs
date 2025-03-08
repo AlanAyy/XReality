@@ -19,9 +19,15 @@ public class UDPListener : MonoBehaviour
     private System.AsyncCallback AC;
     byte[] receivedBytes;
 
+    private Texture2D receivedTexture;
+    public UnityEngine.UI.RawImage display;  // Assign this in Unity Inspector
+    private bool newFrameAvailable = false;
+    private object frameLock = new object();
+
     void Start()
     {
         InitializeUDPListener();
+        receivedTexture = new Texture2D(640, 480);  // Match Pi Camera resolution   
     }
 
     public void InitializeUDPListener()
@@ -37,7 +43,7 @@ public class UDPListener : MonoBehaviour
         if (showDebug) Debug.Log("BufSize: " + clientData.Client.ReceiveBufferSize);
         AC = new System.AsyncCallback(ReceivedUDPPacket);
         clientData.BeginReceive(AC, obj);
-        Debug.Log("UDP - Start Receiving...");
+        if (showDebug) Debug.Log("UDP - Start Receiving...");
     }
 
     void ReceivedUDPPacket(System.IAsyncResult result)
@@ -50,7 +56,9 @@ public class UDPListener : MonoBehaviour
     [Button]
     public void SendTestUDPPacket()
     {
-        SendUDPPacket("Test!");
+        SendUDPPacket("connect");
+        // SendUDPPacket("step 45 45 -75 45 0 -75 45 0 -30 45 45 -75");
+        // SendUDPPacket("disconnect");
     }
 
     public void SendUDPPacket(string message)
@@ -58,7 +66,7 @@ public class UDPListener : MonoBehaviour
         try
         {
             byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
-            clientData.Send(data, data.Length, new IPEndPoint(IPAddress.Parse("127.0.0.1"), portData));
+            clientData.Send(data, data.Length, new IPEndPoint(IPAddress.Parse("255.255.255.255"), portData));
             if (showDebug) Debug.Log($"Sent UDP Packet to {ipEndPointData.Address}:{ipEndPointData.Port}");
         }
         catch (System.Exception e)
@@ -70,10 +78,33 @@ public class UDPListener : MonoBehaviour
     void ParsePacket()
     {
         // work with receivedBytes
-        Debug.Log("receivedBytes len = " + receivedBytes.Length);
+        if (showDebug) Debug.Log("receivedBytes len = " + receivedBytes.Length);
         if (receivedBytes.Length < 100)
         {
-            Debug.Log("Message: " + System.Text.Encoding.Default.GetString(receivedBytes));
+            if (showDebug) Debug.Log("Message: " + System.Text.Encoding.Default.GetString(receivedBytes));
+        }
+        else
+        {
+            if (showDebug) Debug.Log("Image received");
+            lock (frameLock)  // Ensure thread safety
+            {
+                newFrameAvailable = true;
+            }
+        }
+        
+    }
+
+    void Update()
+    {
+        if (newFrameAvailable)
+        {
+            lock (frameLock)  // Avoid thread conflicts
+            {
+                receivedTexture.LoadImage(receivedBytes);  // Decode JPEG
+                newFrameAvailable = false;
+                if (showDebug) Debug.Log("Frame loaded");
+            }
+            display.texture = receivedTexture;  // Apply texture to UI
         }
     }
 
