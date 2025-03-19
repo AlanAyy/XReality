@@ -108,7 +108,6 @@ public class UDPListener : MonoBehaviour
     {
         if (showDebug) Debug.Log("Connected to RealityCrawler!");
         if (crawlerIP != DEFAULT_IP) return;  // Ignore if already connected
-        lastConnectionTime = System.DateTime.Now;
         string newIP = ipEndPointData.Address.ToString();
         if (newIP != DEFAULT_IP && newIP != localIP) {
             crawlerIP = newIP;
@@ -124,6 +123,13 @@ public class UDPListener : MonoBehaviour
         crawlerIP = DEFAULT_IP;
         if (showDebug) Debug.Log($"Crawler IP reset to {crawlerIP}");
         resetFrame = true;
+    }
+
+    public void ManualReconnect()
+    {
+        SendUDPPacket("disconnect");
+        SendUDPPacket("connect");
+        SendUDPPacket("startcam");
     }
 
     void ParsePacket()
@@ -150,14 +156,20 @@ public class UDPListener : MonoBehaviour
             {
                 // if (showDebug) Debug.Log("Image received");
                 newFrameAvailable = true;
+                lastConnectionTime = System.DateTime.Now;
             }
         }
     }
 
     void Update()
     {
-        // Check if connection is stale (DISABLED FOR NOW)
-        // if (crawlerIP != DEFAULT_IP && System.DateTime.Compare(lastConnectionTime.AddSeconds(TIMEOUT_SECS), System.DateTime.Now) < 0) SendUDPPacket("disconnect");
+        // Check if connection is stale (DISABLED FOR NOW CAUSE IT DOESN'T WORK FOR SOME REASON, FUCK UNITY)
+        // if (crawlerIP != DEFAULT_IP && System.DateTime.Compare(lastConnectionTime.AddSeconds(TIMEOUT_SECS), System.DateTime.Now) < 0)
+        // {
+        //     if (showDebug) Debug.Log("Connection stale, attempting to reconnect...");
+        //     ManualReconnect();
+        //     lastConnectionTime = System.DateTime.Now;
+        // }
         // Update the display with the new frame
         if (newFrameAvailable)
         {
