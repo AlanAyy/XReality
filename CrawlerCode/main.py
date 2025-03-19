@@ -2,6 +2,7 @@ import time
 import socket
 import cv2
 import numpy
+from datetime import datetime
 
 from multiprocessing import Process, Manager, Lock
 
@@ -11,88 +12,113 @@ from picamera2 import Picamera2
 
 
 DEFAULT_PORT = 23232
+DEBUG = True
+CMD_SOUNDS = False
+
+
+def dbg(*args, **kwargs):
+    if DEBUG:
+        print(f'[{datetime.now().strftime("%H:%M:%S")}] ', end='')
+        print(*args, **kwargs)
 
 
 class NetCrawler():
     def __init__(self):
-        # PiCrawler stuff
+        # PiCrawler
+        dbg(f'Booting up Crawler...')
         self.crawler = Picrawler()
+        dbg(f'Booting up Music/TTS...')
         self.music = Music()
         self.tts = TTS()
         self.speed = 80
-        # Networking stuff
+        # Networking
         self.sock = self._bind_recv_sock()
         self.vr_addr = None
         self.send_process = None
+        # Multithreading
+        self.manager = Manager()
+        self.send_feed = self.manager.Value(bool, False)
         # Play a sound when ready!
-        print(f'Ready to go!')
+        dbg(f'Ready to go!')
         self.music.sound_play('./sounds/sign.wav')
 
     def __del__(self):
+        self.manager.shutdown()
         self.sock.close()
         # self.music.sound_play('./sounds/depress.wav')
 
     def _bind_recv_sock(self, ip='0.0.0.0'):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((ip, DEFAULT_PORT))
-        print(f'Listening on {ip}:{DEFAULT_PORT}')
+        dbg(f'Listening on {ip}:{DEFAULT_PORT}')
         return sock
 
-    def _send_packet(self, message: str, addr: str, encode: bool = True):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    def _send_packet(self, message: str, addr: str, encode: bool = True, sock: socket.socket = None, debug: bool = True):
+        close_socket = False
+        if sock is None:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            close_socket = True
         try:
-            if encode:
-                sock.sendto(message.encode(), addr)
-            else:
-                sock.sendto(message, addr)
-            # print(f'Message of len {len(message)} sent to {addr}')
+            sock.sendto(message.encode() if encode else message, addr)
+            if debug:
+                dbg(f'Message "{message}" sent to {addr}')
+            # self.dbg_slow(1, f'Message of len {len(message)} sent to {addr}')
         finally:
-            sock.close()
+            if close_socket:
+                sock.close()
 
-    def cmd_connect(self, addr):
+    def cmd_connect(self, addr, sound=CMD_SOUNDS):
         self.vr_addr = addr
-        print(f'Connected to Unity at {self.vr_addr}')
+        dbg(f'Connected to Unity at {self.vr_addr}')
         self._send_packet('connected', self.vr_addr)
-        self.music.sound_play('./sounds/bell.wav')
+        if sound:
+            self.music.sound_play('./sounds/bell.wav')
 
-    def cmd_startcam(self):
-        print(f'Starting camera feed!')
-        self.send_process = Process(target=self.run_send, args=(self.vr_addr, self.send_feed,))
+    def cmd_startcam(self, sound=CMD_SOUNDS):
+        if self.send_feed.value:
+            dbg(f'Camera already running. Ignoring command...')
+        dbg(f'Starting camera feed!')
         self.send_feed.value = True
+        self.send_process = Process(target=self.run_send, args=(self.vr_addr, self.send_feed,))
         self.send_process.start()
-        self.music.sound_play('./sounds/bell.wav')
+        if sound:
+            self.music.sound_play('./sounds/bell.wav')
 
-    def cmd_stopcam(self):
-        print(f'Stopping camera feed.')
+    def cmd_stopcam(self, sound=CMD_SOUNDS):
+        dbg(f'Stopping camera feed.')
         self.send_feed.value = False
         self.send_process.join()
-        self.music.sound_play('./sounds/depress.wav')
+        if sound:
+            self.music.sound_play('./sounds/depress.wav')
 
-    def cmd_disconnect(self, addr):
-        print(f'Disconnecting from {self.vr_addr}')
+    def cmd_disconnect(self, sound=CMD_SOUNDS):
+        dbg(f'Disconnecting from {self.vr_addr}')
         self._send_packet('disconnected', self.vr_addr)
         self.vr_addr = None
-        self.music.sound_play('./sounds/depress2.wav')
+        self.cmd_stopcam(sound=False)
+        if sound:
+            self.music.sound_play('./sounds/depress2.wav')
 
-    def send_frame(self, camera, vr_addr: str):
+    def send_frame(self, camera, vr_addr: str, sock=None):
         frame = camera.capture_array()
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         encoded, img_buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
         data = img_buf.tobytes()
-        self._send_packet(data, vr_addr, encode=False)
+        self._send_packet(data, vr_addr, encode=False, sock=sock, debug=False)
 
     def handle_receive(self, data: str, addr: str):
         msg = data.decode()
-        print(f'Received message: {msg} from {addr}')
+        dbg(f'Message "{msg}" received from {addr}')
         args = msg.split()
-        # If a connection is already present, ignore commands from others
+        # If a connection exists, ignore commands from others
         if self.vr_addr and addr != self.vr_addr:
-            print(f'Ignoring command...')
+            dbg(f'Ignoring command...')
         # Handle connection and disconnection
         if msg == 'connect' and not self.vr_addr:
             self.cmd_connect(addr)
         elif msg == 'disconnect' and self.vr_addr:
-            self.cmd_disconnect(addr)
+            self.cmd_disconnect()
+
         # Ignore commands if the server address is not set
         if not self.vr_addr:
             return
@@ -129,20 +155,25 @@ class NetCrawler():
         camera = Picamera2()
         camera.configure(camera.create_preview_configuration(main={'size': (640, 480)}))
         camera.start()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        start = time.perf_counter()
+        fps = 0
         while send_feed.value:
-            self.send_frame(camera, vr_addr)
-    
+            self.send_frame(camera, vr_addr, sock)
+            if time.perf_counter() - start > 10:
+                dbg(f'Sent {fps} frames ({round(fps/10)} fps) to {vr_addr}')
+                fps = 0
+                start = time.perf_counter()
+            fps += 1
+        dbg(f'Closing thread - Sent {fps} frames ({round(fps/10)} fps) to {vr_addr}')
+        camera.stop()
+
     def run(self):
-        with Manager() as manager:
-            # lock = manager.Lock()
-            self.send_feed = manager.Value(bool, False)
-            # Run the processes
-            self.run_recv()
+        self.run_recv()
 
 
 def main():
     crawler = NetCrawler()
-    # crawler.run_recv()
     crawler.run()
 
 
