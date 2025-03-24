@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using NaughtyAttributes;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.XR.Content.Interaction;
 
 public class UDPListener : MonoBehaviour
 {
@@ -31,6 +32,8 @@ public class UDPListener : MonoBehaviour
     private string localIP = null;
     // private const int TIMEOUT_SECS = 5;  // seconds
     private System.DateTime lastConnectionTime;
+    
+    public XRJoystick joystick;
 
     void Start()
     {
@@ -38,7 +41,46 @@ public class UDPListener : MonoBehaviour
         receivedTexture = new Texture2D(640, 480);  // Match Pi Camera resolution
         localIP = GetLocalIPAddress();
         if (showDebug) Debug.Log("Local IP: " + localIP);
+        InvokeRepeating(nameof(CalledEverySecond), 2f, 2f);
     }
+
+// measures dominant direction of joystick
+void CalledEverySecond()
+{
+    float x = joystick.value.x;
+    float y = joystick.value.y;
+
+    // Choose whichever axis has the greater absolute value
+    if (Mathf.Abs(x) > Mathf.Abs(y))
+    {
+        // X axis dominates
+        if (x > 0f)
+        {
+            // Debug.Log("move forward");
+            SendUDPPacket("move forward");
+        }
+        else
+        {
+            // Debug.Log("move backward");
+            SendUDPPacket("move backward");
+        }
+    }
+    else if (Mathf.Abs(y) > Mathf.Abs(x))
+    {
+        // Y axis dominates
+        if (y > 0f)
+        {
+            // Debug.Log("move left");
+            SendUDPPacket("move left");
+        }
+        else
+        {
+            // Debug.Log("move right");
+            SendUDPPacket("move right");
+        }
+    }
+}
+
 
     public void InitializeUDPListener()
     {
