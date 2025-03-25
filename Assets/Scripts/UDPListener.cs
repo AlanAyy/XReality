@@ -41,7 +41,7 @@ public class UDPListener : MonoBehaviour
         receivedTexture = new Texture2D(640, 480);  // Match Pi Camera resolution
         localIP = GetLocalIPAddress();
         if (showDebug) Debug.Log("Local IP: " + localIP);
-        InvokeRepeating(nameof(CalledEverySecond), 2f, 2f);
+        InvokeRepeating(nameof(CalledEverySecond), 1.5f, 1.5f);
     }
 
 // measures dominant direction of joystick
