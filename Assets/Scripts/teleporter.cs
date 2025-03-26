@@ -12,6 +12,8 @@ public class Teleporter : MonoBehaviour
     // Optional: Set rotation if you want to re-orient the player
     public Vector3 cockpitRotationEuler = Vector3.zero;
     public Vector3 exitRotationEuler = Vector3.zero;
+    // public Vector3 resetEuler = Vector3.zero;
+
 
     public void teleportPlayerToCockpit()
     {
@@ -38,4 +40,17 @@ public class Teleporter : MonoBehaviour
             Debug.LogWarning("Player not assigned.");
         }
     }
+
+    // public void resetView() 
+    // {
+    //     if (player != null)
+    //     {
+    //         player.position = exitPosition;
+    //         player.rotation = Quaternion.Euler();
+    //     }
+    //     else
+    //     {
+    //         Debug.LogWarning("Player not assigned.");
+    //     }
+    // }
 }
