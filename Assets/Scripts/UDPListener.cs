@@ -23,6 +23,7 @@ public class UDPListener : MonoBehaviour
 
     private Texture2D receivedTexture;
     public RawImage display;  // Assign this in Unity Inspector
+    public Texture2D resetTexture;
     private bool newFrameAvailable = false;
     private bool resetFrame = false;
     private object frameLock = new object();
@@ -41,46 +42,48 @@ public class UDPListener : MonoBehaviour
         receivedTexture = new Texture2D(640, 480);  // Match Pi Camera resolution
         localIP = GetLocalIPAddress();
         if (showDebug) Debug.Log("Local IP: " + localIP);
-        InvokeRepeating(nameof(CalledEverySecond), 1.5f, 1.5f);
+        if (resetTexture != null) display.texture = resetTexture;  // Apply reset texture
+        // Handle joystick
+        if (joystick == null) Debug.LogWarning("Joystick not assigned! Ignoring...");
+        else InvokeRepeating(nameof(CalledEverySecond), 1.5f, 1.5f);
     }
 
-// measures dominant direction of joystick
-void CalledEverySecond()
-{
-    float x = joystick.value.x;
-    float y = joystick.value.y;
-
-    // Choose whichever axis has the greater absolute value
-    if (Mathf.Abs(x) > Mathf.Abs(y))
+    // measures dominant direction of joystick
+    void CalledEverySecond()
     {
-        // X axis dominates
-        if (x > 0f)
-        {
-            // Debug.Log("move forward");
-            SendUDPPacket("move forward");
-        }
-        else
-        {
-            // Debug.Log("move backward");
-            SendUDPPacket("move backward");
-        }
-    }
-    else if (Mathf.Abs(y) > Mathf.Abs(x))
-    {
-        // Y axis dominates
-        if (y > 0f)
-        {
-            // Debug.Log("move left");
-            SendUDPPacket("move left");
-        }
-        else
-        {
-            // Debug.Log("move right");
-            SendUDPPacket("move right");
-        }
-    }
-}
+        float x = joystick.value.x;
+        float y = joystick.value.y;
 
+        // Choose whichever axis has the greater absolute value
+        if (Mathf.Abs(x) > Mathf.Abs(y))
+        {
+            // X axis dominates
+            if (x > 0f)
+            {
+                // Debug.Log("move forward");
+                SendUDPPacket("move forward");
+            }
+            else
+            {
+                // Debug.Log("move backward");
+                SendUDPPacket("move backward");
+            }
+        }
+        else if (Mathf.Abs(y) > Mathf.Abs(x))
+        {
+            // Y axis dominates
+            if (y > 0f)
+            {
+                // Debug.Log("move left");
+                SendUDPPacket("move left");
+            }
+            else
+            {
+                // Debug.Log("move right");
+                SendUDPPacket("move right");
+            }
+        }
+    }
 
     public void InitializeUDPListener()
     {
@@ -197,7 +200,7 @@ void CalledEverySecond()
             lock (frameLock)  // Ensure thread safety
             {
                 // if (showDebug) Debug.Log("Image received");
-                newFrameAvailable = true;
+                if (crawlerIP != DEFAULT_IP) newFrameAvailable = true;
                 lastConnectionTime = System.DateTime.Now;
             }
         }
@@ -225,16 +228,25 @@ void CalledEverySecond()
         }
         if (resetFrame)
         {
-            receivedTexture = new Texture2D(640, 480);
-            Color32[] whitePixels = new Color32[640 * 480];
-            for (int i = 0; i < whitePixels.Length; i++)
+            lock (frameLock)
             {
-                whitePixels[i] = new Color32(255, 255, 255, 255);  // White color
+                if (resetTexture == null)
+                {
+                    receivedTexture = new Texture2D(640, 480);
+                    Color32[] whitePixels = new Color32[640 * 480];
+                    for (int i = 0; i < whitePixels.Length; i++)
+                    {
+                        whitePixels[i] = new Color32(255, 255, 255, 255);  // White color
+                    }
+                    receivedTexture.SetPixels32(whitePixels);
+                    receivedTexture.Apply();
+                    display.texture = receivedTexture;  // Apply texture to UI
+                    resetFrame = false;
+                } else {
+                    display.texture = resetTexture;
+                    resetFrame = false;
+                }
             }
-            receivedTexture.SetPixels32(whitePixels);
-            receivedTexture.Apply();
-            display.texture = receivedTexture;  // Apply texture to UI
-            resetFrame = false;
         }
     }
 
