@@ -1935,7 +1935,7 @@ MonoBehaviour:
   receiveBufferSize: 2048
   showDebug: 1
   display: {fileID: 190488024}
-  resetTexture: {fileID: 2800000, guid: e45f8f823c093d941855bb23b53b9414, type: 3}
+  resetTexture: {fileID: 2800000, guid: d06610b00fa8bef4eac165c4c4da4158, type: 3}
   joystick: {fileID: 0}
 --- !u!4 &194174766
 Transform:
