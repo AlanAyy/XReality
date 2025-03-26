@@ -172,9 +172,9 @@ public class UDPListener : MonoBehaviour
 
     public void ManualReconnect()
     {
-        SendUDPPacket("disconnect");
-        SendUDPPacket("connect");
-        SendUDPPacket("startcam");
+        SendUDPPacket("disconnect nosound");
+        SendUDPPacket("connect nosound");
+        SendUDPPacket("startcam nosound");
     }
 
     void ParsePacket()
