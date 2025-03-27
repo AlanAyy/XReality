@@ -12,8 +12,9 @@ from picamera2 import Picamera2
 
 
 DEFAULT_PORT = 23232
+INPUT_TIMEOUT_SECS = 60
 DEBUG = True
-CMD_SOUNDS = False
+CMD_SOUNDS = True
 
 
 def dbg(*args, **kwargs):
@@ -35,6 +36,7 @@ class NetCrawler():
         self.sock = self._bind_recv_sock()
         self.vr_addr = None
         self.send_process = None
+        self.terminate = False
         # Multithreading
         self.manager = Manager()
         self.send_feed = self.manager.Value(bool, False)
@@ -45,10 +47,10 @@ class NetCrawler():
     def __del__(self):
         self.manager.shutdown()
         self.sock.close()
-        # self.music.sound_play('./sounds/depress.wav')
 
     def _bind_recv_sock(self, ip='0.0.0.0'):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(INPUT_TIMEOUT_SECS)
         sock.bind((ip, DEFAULT_PORT))
         dbg(f'Listening on {ip}:{DEFAULT_PORT}')
         return sock
@@ -66,6 +68,9 @@ class NetCrawler():
         finally:
             if close_socket:
                 sock.close()
+
+    def _soundarg(self, args):
+        return (False if len(args) > 1 and args[1] == 'nosound' else CMD_SOUNDS)
 
     def cmd_connect(self, addr, sound=CMD_SOUNDS):
         self.vr_addr = addr
@@ -87,7 +92,8 @@ class NetCrawler():
     def cmd_stopcam(self, sound=CMD_SOUNDS):
         dbg(f'Stopping camera feed.')
         self.send_feed.value = False
-        self.send_process.join()
+        if self.send_process is not None and self.send_process.is_alive():
+            self.send_process.join()
         if sound:
             self.music.sound_play('./sounds/depress.wav')
 
@@ -112,21 +118,24 @@ class NetCrawler():
         args = msg.split()
         # If a connection exists, ignore commands from others
         if self.vr_addr and addr != self.vr_addr:
-            dbg(f'Ignoring command...')
+            dbg(f'Message is from another connection. Ignoring command...')
         # Handle connection and disconnection
-        if msg == 'connect' and not self.vr_addr:
-            self.cmd_connect(addr)
-        elif msg == 'disconnect' and self.vr_addr:
-            self.cmd_disconnect()
+        if args[0] == 'connect' and not self.vr_addr:
+            self.cmd_connect(addr, sound=self._soundarg(args))
+        elif args[0] == 'disconnect' and self.vr_addr:
+            self.cmd_disconnect(sound=self._soundarg(args))
+        elif msg == 'quit':
+            self.cmd_disconnect(sound=True)
+            self.terminate = True
 
         # Ignore commands if the server address is not set
         if not self.vr_addr:
             return
         # Handle camera feed commands
-        if msg == 'startcam':
-            self.cmd_startcam()
-        elif msg == 'stopcam':
-            self.cmd_stopcam()
+        if args[0] == 'startcam':
+            self.cmd_startcam(sound=self._soundarg(args))
+        elif args[0] == 'stopcam':
+            self.cmd_stopcam(sound=self._soundarg(args))
         # Handle movement commands
         elif msg == 'move forward':
             self.crawler.do_action('forward', 1, self.speed)
@@ -145,11 +154,18 @@ class NetCrawler():
             rfx, rfy, rfz, lfx, lfy, lfz, rbx, rby, rbz, lbx, lby, lbz = positions
             new_step = [[rfx, rfy, rfz], [lfx, lfy, lfz], [rbx, rby, rbz], [lbx, lby, lbz]]
             self.crawler.do_step(new_step, self.speed)
+        else:
+            dbg('Unknown command. Ignoring...')
 
     def run_recv(self):
-        while True:
-            data, addr = self.sock.recvfrom(1024)
-            self.handle_receive(data, addr)
+        while not self.terminate:
+            try:
+                data, addr = self.sock.recvfrom(1024)
+                self.handle_receive(data, addr)
+            except TimeoutError:
+                if self.vr_addr:
+                    dbg(f'TimeoutError: Didn\'t receive input for {INPUT_TIMEOUT_SECS} seconds. Disconnecting...')
+                    self.cmd_disconnect()
 
     def run_send(self, vr_addr, send_feed):
         camera = Picamera2()
