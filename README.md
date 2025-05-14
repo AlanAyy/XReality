@@ -7,7 +7,9 @@ Made by **Alan Alcocer-Iturriza** and **Omar Khan** for the CPSC584 Human-Robot 
 
 A special thanks to our professor **Dr. Ehud Sharlin** and our Teacher Assistant **Matt Newton**.
 
-[![Watch the video](https://img.youtube.com/vi/1RQFDsQtsAc/maxresdefault.jpg)](https://youtu.be/1RQFDsQtsAc)
+Watch our demo video below!
+
+[![Watch the video on YouTube](https://i9.ytimg.com/vi/1RQFDsQtsAc/mqdefault.jpg?sqp=CJS1lMEG-oaymwEmCMACELQB8quKqQMa8AEB-AH-CYAC0AWKAgwIABABGDwgVShyMA8=&rs=AOn4CLDbEV5LygCGvDZNqL7a2Fk29l_31g)](https://youtu.be/1RQFDsQtsAc)
 
 
 
